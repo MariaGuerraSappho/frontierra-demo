@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -21,34 +20,65 @@
     .playback-btn:hover { background: #ff1493; }
     .playback-btn:disabled { background: #ffb6c6; cursor: not-allowed; }
     .controls { display: flex; gap: 10px; margin: 20px 0; width: 100%; }
-    .pitch-btn { flex: 1; background: #ff69b4; border: none; padding: 20px; font-size: 1.3em; border-radius: 8px; color: white; cursor: pointer; transition: background 0.2s; touch-action: manipulation; user-select: none; }
+    .pitch-btn { 
+      flex: 1; 
+      background: #ff69b4; 
+      border: none; 
+      padding: 20px; 
+      font-size: 1.3em; 
+      border-radius: 8px; 
+      color: white; 
+      cursor: pointer; 
+      transition: background 0.2s; 
+      touch-action: manipulation; 
+      user-select: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
     .pitch-btn:hover { background: #ff1493; }
+    .pitch-btn svg {
+      width: 24px;
+      height: 24px;
+      fill: white;
+    }
     .adsr-controls { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin: 20px 0; padding: 20px; background: rgba(255,105,180,0.1); border-radius: 10px; width: 100%; }
     .adsr-control { display: flex; flex-direction: column; align-items: center; }
     input[type="range"] { width: 100%; margin: 10px 0; -webkit-appearance: none; height: 2px; background: #ff69b4; }
     input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px; background: #ff69b4; border-radius: 50%; cursor: pointer; }
+    .status-msg { 
+      margin: 10px 0;
+      color: #ff1493;
+      font-size: 0.9em;
+      min-height: 1.2em;
+    }
     @media (max-width: 480px) { .pitch-btn { padding: 15px; font-size: 1.1em; } .playback-btn { padding: 12px; font-size: 1em; } }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Frontierra</h1>
-    <div class="build-number">Build: 1.2.1</div>
+    <div class="build-number">Build: 1.2.2</div>
     <div class="file-upload">
       <label class="upload-btn">
         Upload audio file
-        <input type="file" id="audioFile" />
+        <input type="file" id="audioFile" accept="audio/*" />
       </label>
     </div>
     <div class="currently-playing" id="currentFile">No file loaded</div>
     <div class="pitch-display" id="pitchDisplay">Pitch: 0 cents</div>
+    <div class="status-msg" id="statusMsg"></div>
     <div class="playback-controls">
       <button class="playback-btn" id="playBtn" disabled>Play</button>
       <button class="playback-btn" id="stopBtn" disabled>Stop</button>
     </div>
     <div class="controls">
-      <button class="pitch-btn" id="pitchDown">−</button>
-      <button class="pitch-btn" id="pitchUp">+</button>
+      <button class="pitch-btn" id="pitchDown">
+        <svg viewBox="0 0 24 24"><path d="M19 13H5v-2h14v2z"/></svg>
+      </button>
+      <button class="pitch-btn" id="pitchUp">
+        <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+      </button>
     </div>
     <div class="adsr-controls">
       <div class="adsr-control"><label>Attack</label><input type="range" id="attack" min="0" max="2" step="0.1" value="0.1"></div>
@@ -60,13 +90,16 @@
   </div>
 
   <script>
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // Initialize audio context only after user interaction to comply with mobile browsers
+    let audioCtx = null;
     let wavBuffer = null;
     let sourceNode = null;
     let gainNode = null;
     let isPlaying = false;
     let currentPitch = 0;
+    let pitchBendActive = false;
 
+    const statusMsg = document.getElementById('statusMsg');
     const fileInput = document.getElementById('audioFile');
     const playBtn = document.getElementById('playBtn');
     const stopBtn = document.getElementById('stopBtn');
@@ -77,8 +110,30 @@
     const sustainSlider = document.getElementById('sustain');
     const releaseSlider = document.getElementById('release');
     const volumeSlider = document.getElementById('volume');
+    
+    // Initialize audio context on first user interaction
+    function initAudioContext() {
+      if (!audioCtx) {
+        try {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          statusMsg.textContent = "Audio initialized";
+          setTimeout(() => { statusMsg.textContent = ""; }, 2000);
+        } catch (e) {
+          console.error("Failed to create audio context:", e);
+          statusMsg.textContent = "Audio initialization failed";
+        }
+      }
+      return audioCtx;
+    }
+
+    // Event listeners for buttons to ensure audio context is created
+    document.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', initAudioContext);
+    });
 
     fileInput.addEventListener('change', async (e) => {
+      initAudioContext(); // Ensure audio context is created
+      
       const file = e.target.files[0];
       if (!file) return;
       if (isPlaying) stopPlayback();
@@ -96,9 +151,12 @@
         currentFileLabel.textContent = `Loaded: ${file.name}`;
         playBtn.disabled = false;
         stopBtn.disabled = false;
+        statusMsg.textContent = "File loaded successfully";
+        setTimeout(() => { statusMsg.textContent = ""; }, 2000);
       } catch (err) {
         console.error('Decode error:', err);
         currentFileLabel.textContent = 'Error loading file';
+        statusMsg.textContent = "Error: Couldn't decode audio file";
       }
     });
 
@@ -113,11 +171,18 @@
       gainNode.gain.setValueAtTime(0, now);
       gainNode.gain.linearRampToValueAtTime(vol, now + a);
       gainNode.gain.linearRampToValueAtTime(vol * s, now + a + d);
-      // release on stop
     }
 
     function playAudio() {
-      if (audioCtx.state === 'suspended') audioCtx.resume();
+      initAudioContext(); // Ensure context is created
+      
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().then(() => {
+          statusMsg.textContent = "Audio resumed";
+          setTimeout(() => { statusMsg.textContent = ""; }, 2000);
+        });
+      }
+      
       if (wavBuffer) {
         sourceNode?.stop();
         gainNode = audioCtx.createGain();
@@ -130,6 +195,12 @@
         sourceNode.playbackRate.value = Math.pow(2, currentPitch / 1200);
         sourceNode.connect(gainNode);
         sourceNode.start(now);
+        sourceNode.onended = function() {
+          if (isPlaying) {
+            isPlaying = false;
+            playBtn.textContent = 'Play';
+          }
+        };
 
         isPlaying = true;
         playBtn.textContent = 'Restart';
@@ -155,6 +226,8 @@
     stopBtn.addEventListener('click', stopPlayback);
 
     function changePitch(cents) {
+      if (!audioCtx) initAudioContext();
+      
       currentPitch += cents;
       pitchDisplay.textContent = `Pitch: ${currentPitch.toFixed(1)} cents`;
       if (sourceNode && isPlaying) {
@@ -162,17 +235,54 @@
       }
     }
 
+    // Improved touch & mouse handling for pitch buttons
     ['pitchUp', 'pitchDown'].forEach((id) => {
       const btn = document.getElementById(id);
       let interval;
-      const startBend = () => {
+      
+      const startBend = (e) => {
+        e.preventDefault(); // Prevent default behavior
+        if (pitchBendActive) return; // Prevent multiple activation
+        
+        pitchBendActive = true;
+        changePitch(id === 'pitchUp' ? 2 : -2); // Initial change
+        
+        // Clear any existing interval and start a new one
         clearInterval(interval);
         interval = setInterval(() => changePitch(id === 'pitchUp' ? 2 : -2), 100);
       };
-      const stopBend = () => clearInterval(interval);
+      
+      const stopBend = (e) => {
+        if (e) e.preventDefault(); // Prevent default behavior
+        clearInterval(interval);
+        pitchBendActive = false;
+      };
+      
+      // Mouse events
       btn.addEventListener('mousedown', startBend);
-      btn.addEventListener('touchstart', startBend);
-      ['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach(evt => btn.addEventListener(evt, stopBend));
+      window.addEventListener('mouseup', stopBend);
+      
+      // Touch events
+      btn.addEventListener('touchstart', startBend, { passive: false });
+      window.addEventListener('touchend', stopBend);
+      window.addEventListener('touchcancel', stopBend);
+    });
+
+    // Keyboard arrow keys for pitch control
+    document.addEventListener('keydown', (e) => {
+      if (!audioCtx) initAudioContext();
+      
+      if (e.key === 'ArrowUp') changePitch(2);
+      else if (e.key === 'ArrowDown') changePitch(-2);
+      else if (e.key === 'ArrowRight') changePitch(2);
+      else if (e.key === 'ArrowLeft') changePitch(-2);
+    });
+    
+    // Handle page visibility changes to stop playback when tab is hidden
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && isPlaying) {
+        stopPlayback();
+      }
     });
   </script>
 </body>
