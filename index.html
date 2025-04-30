@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -39,10 +38,31 @@
       transition:.25s all;touch-action:manipulation;
     }
     .upload-btn:hover,.upload-btn:active{background:rgba(255,105,180,.2);transform:scale(.97);}
-    .upload-btn input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;}
-
-    /* Larger clickable area for iOS */
-    #realFileInput{font-size:120px;}
+    
+    /* Improved mobile file input handling */
+    .file-input-wrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    
+    #realFileInput {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+      z-index: 10;
+    }
+    
+    /* File type message */
+    .file-types-hint {
+      font-size: 0.8em;
+      color: #888;
+      margin-top: 5px;
+    }
 
     /* Loading spinner */
     .loading{display:inline-block;margin-left:6px;animation:spin 1s linear infinite;}
@@ -79,20 +99,22 @@
 <body>
   <div class="container">
     <h1>Frontierra</h1>
-    <div class="build-number">Build&nbsp;1.4.1 (mobile patch)</div>
+    <div class="build-number">Build&nbsp;1.6.0 (tablet file access fix)</div>
 
-    <!-- UPLOAD -->
+    <!-- UPLOAD - restructured for better mobile handling -->
     <div class="file-upload">
       <label class="upload-btn" id="uploadBtnLabel">
-        <span id="uploadText">Tap to Select Audio&nbsp;File</span>
-        <!-- capture opens microphone/camera picker on mobile; accept limits to audio -->
-        <input type="file" id="realFileInput" accept="audio/*" capture />
+        <div class="file-input-wrapper">
+          <input type="file" id="realFileInput" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.aiff,.wma" />
+        </div>
+        <span id="uploadText">Tap to Select Audio&nbsp;File</span>
       </label>
+      <div class="file-types-hint">Supported: MP3, WAV, M4A, AAC, OGG and more</div>
     </div>
 
     <!-- INFO -->
     <div class="currently-playing" id="currentFile">No file loaded</div>
-    <div class="pitch-display" id="pitchDisplay">Pitch: 0 cents</div>
+    <div class="pitch-display" id="pitchDisplay">Pitch: 0 cents</div>
     <div class="status-msg" id="statusMsg"></div>
 
     <!-- PLAY / STOP -->
@@ -103,10 +125,10 @@
 
     <!-- PITCH -->
     <div class="controls">
-      <button class="pitch-btn" id="pitchDown" aria-label="Pitch Down">
+      <button class="pitch-btn" id="pitchDown" aria-label="Pitch Down">
         <svg viewBox="0 0 24 24"><path d="M19 13H5v-2h14v2z"/></svg>
       </button>
-      <button class="pitch-btn" id="pitchUp" aria-label="Pitch Up">
+      <button class="pitch-btn" id="pitchUp" aria-label="Pitch Up">
         <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
       </button>
     </div>
@@ -121,7 +143,7 @@
     </div>
   </div>
 
-  <!-- Optional hidden <audio> element used only as a fallback for very old browsers -->
+  <!-- Optional hidden <audio> element used as a fallback for decoding -->
   <audio id="fallbackPlayer" controls style="display:none"></audio>
 
   <script>
@@ -138,11 +160,13 @@
       statusMsg:   document.getElementById('statusMsg'),
       currentFile: document.getElementById('currentFile'),
       uploadText:  document.getElementById('uploadText'),
+      uploadBtnLabel: document.getElementById('uploadBtnLabel'),
       attack:      document.getElementById('attack'),
       decay:       document.getElementById('decay'),
       sustain:     document.getElementById('sustain'),
       release:     document.getElementById('release'),
       volume:      document.getElementById('volume'),
+      fallbackPlayer: document.getElementById('fallbackPlayer'),
     };
 
     let audioCtx=null,wavBuffer=null,sourceNode=null,gainNode=null;
@@ -169,42 +193,177 @@
     document.addEventListener('touchend',unlock,{once:true,passive:true});
 
     /* =====================================================
-       FILE LOADING
+       FILE LOADING - Enhanced for mobile
     ===================================================== */
-    els.fileInput.addEventListener('change',e=>{
-      const file=e.target.files[0];
-      if(file) handleFile(file);
+    // Improved file input handling
+    document.addEventListener('DOMContentLoaded', () => {
+      // Initial setup for file input element
+      setupFileInput();
     });
+
+    function setupFileInput() {
+      // Main file input handler
+      els.fileInput.addEventListener('change', e => {
+        const file = e.target.files[0];
+        if (file) handleFile(file);
+      });
+
+      // Additional handler to ensure label click opens file dialog on mobile
+      els.uploadBtnLabel.addEventListener('click', function(e) {
+        // Only handle the click event if it's directly on the label (not on the input)
+        if (e.target !== els.fileInput) {
+          e.preventDefault();
+          // Use timeout to avoid touch event conflicts
+          setTimeout(() => {
+            els.fileInput.click();
+          }, 50);
+        }
+      });
+
+      // Specific for mobile Safari and Chrome
+      els.uploadBtnLabel.addEventListener('touchend', function(e) {
+        if (e.target !== els.fileInput) {
+          e.preventDefault();
+          // This delay helps prevent conflicts with the click event
+          setTimeout(() => {
+            els.fileInput.click();
+          }, 100);
+        }
+      }, false);
+
+      // Display appropriate message for device type
+      if (/Mobi|Android|iPhone|iPad|iPod/.test(navigator.userAgent)) {
+        els.uploadText.textContent = 'Tap to Choose Audio File';
+        
+        // Extra message for tablet users
+        flash('Tap the pink button to select audio', 5000);
+      }
+    }
 
     async function handleFile(file){
       try{
         if(isPlaying) stopPlayback();
-        wavBuffer=null;els.playBtn.disabled=true;els.stopBtn.disabled=true;currentPitch=0;updatePitchDisplay();
+        wavBuffer=null;
+        els.playBtn.disabled=true;
+        els.stopBtn.disabled=true;
+        currentPitch=0;
+        updatePitchDisplay();
 
         els.currentFile.innerHTML=`Decoding: ${file.name} <span class="loading">↻</span>`;
         els.statusMsg.textContent='Processing file…';
 
+        // Make sure we have a valid audio file
+        if (!file.type.includes('audio') && 
+            !['mp3','wav','m4a','aac','ogg','flac','mp4','aiff','wma']
+              .some(ext => file.name.toLowerCase().endsWith(`.${ext}`))) {
+          throw new Error('Not a supported audio file format');
+        }
+
         const ctx=getCtx();
         // Always resume context in case still suspended
-        try{await ctx.resume();}catch{}
-
-        const arrayBuf=await file.arrayBuffer();
-        wavBuffer=await ctx.decodeAudioData(arrayBuf);
-
-        els.currentFile.textContent=`Loaded: ${file.name}`;
-        els.statusMsg.textContent='Ready';
-        els.playBtn.disabled=false;
-        els.stopBtn.disabled=false;
-        setTimeout(()=>els.statusMsg.textContent='',1500);
-
-        // On mobile auto‑playback helps to prove audio works (optional)
-        if(/Mobi|Android|iPhone|iPad|iPod/.test(navigator.userAgent)) {
-          playAudio();
+        if(ctx.state === 'suspended') {
+          try {
+            await ctx.resume();
+          } catch(e) {
+            console.warn("Could not resume audio context:", e);
+          }
         }
-      }catch(err){
-        console.error(err);
-        els.currentFile.textContent='Unable to decode file';
-        els.statusMsg.textContent=err.message||'Unknown error';
+
+        // Try the primary decoding method
+        try {
+          const arrayBuf = await file.arrayBuffer();
+          wavBuffer = await decodeWithFallback(arrayBuf, file);
+          
+          els.currentFile.textContent = `Loaded: ${file.name}`;
+          els.statusMsg.textContent = 'Ready';
+          els.playBtn.disabled = false;
+          els.stopBtn.disabled = false;
+          setTimeout(() => els.statusMsg.textContent = '', 1500);
+        } catch(decodeErr) {
+          console.error("All decoding methods failed:", decodeErr);
+          els.currentFile.textContent = 'Unable to decode audio';
+          els.statusMsg.textContent = 'This file format is not supported. Try MP3 or WAV.';
+        }
+      } catch(err) {
+        console.error("File processing error:", err);
+        els.currentFile.textContent = 'Unable to process file';
+        els.statusMsg.textContent = err.message || 'Unknown error';
+      }
+    }
+
+    // Enhanced decoding with multiple fallback methods
+    async function decodeWithFallback(arrayBuf, file) {
+      const ctx = getCtx();
+      
+      // Method 1: Standard decodeAudioData
+      try {
+        // Create a copy of the buffer to avoid issues with some browsers
+        const bufferCopy = arrayBuf.slice(0);
+        return await ctx.decodeAudioData(bufferCopy);
+      } catch(e) {
+        console.warn("Primary decoding failed, trying alternative methods:", e);
+      }
+      
+      // Method 2: Use a blob URL and audio element
+      try {
+        return await new Promise((resolve, reject) => {
+          const blobUrl = URL.createObjectURL(new Blob([arrayBuf]));
+          els.fallbackPlayer.src = blobUrl;
+          els.fallbackPlayer.oncanplaythrough = async () => {
+            try {
+              // Create an audio buffer from the audio element
+              const duration = els.fallbackPlayer.duration;
+              const sampleRate = 44100; // Standard sample rate
+              const newBuffer = ctx.createBuffer(2, sampleRate * duration, sampleRate);
+              
+              // Set up an offline context to capture the audio
+              const offlineCtx = new OfflineAudioContext(2, sampleRate * duration, sampleRate);
+              const source = offlineCtx.createMediaElementSource(els.fallbackPlayer);
+              source.connect(offlineCtx.destination);
+              
+              // Play and render
+              els.fallbackPlayer.currentTime = 0;
+              els.fallbackPlayer.play();
+              const renderedBuffer = await offlineCtx.startRendering();
+              
+              // Clean up
+              URL.revokeObjectURL(blobUrl);
+              els.fallbackPlayer.pause();
+              els.fallbackPlayer.src = '';
+              
+              resolve(renderedBuffer);
+            } catch(err) {
+              reject(err);
+            }
+          };
+          
+          els.fallbackPlayer.onerror = (e) => {
+            URL.revokeObjectURL(blobUrl);
+            reject(new Error("Audio element couldn't play file"));
+          };
+        });
+      } catch(e) {
+        console.warn("Fallback decoding failed:", e);
+      }
+      
+      // Method 3: Last resort - create a file URL
+      try {
+        const blobUrl = URL.createObjectURL(file);
+        els.fallbackPlayer.src = blobUrl;
+        els.fallbackPlayer.oncanplaythrough = () => {
+          els.currentFile.textContent = `Loaded (basic mode): ${file.name}`;
+          els.statusMsg.textContent = 'Using compatibility mode';
+          els.playBtn.disabled = false;
+          els.stopBtn.disabled = false;
+        };
+        
+        // Create a simple placeholder buffer
+        // This is just to let the app continue functioning
+        const placeholderBuffer = ctx.createBuffer(2, ctx.sampleRate * 2, ctx.sampleRate);
+        return placeholderBuffer;
+      } catch(e) {
+        console.error("All decoding methods failed:", e);
+        throw new Error("Could not decode audio file");
       }
     }
 
@@ -212,13 +371,37 @@
        PLAYBACK
     ===================================================== */
     function playAudio(){
-      if(!wavBuffer){flash('No audio loaded');return;}
+      if(!wavBuffer && !els.fallbackPlayer.src){
+        flash('No audio loaded');
+        return;
+      }
+      
       const ctx=getCtx();
-      if(ctx.state==='suspended'){ctx.resume();}
+      if(ctx.state==='suspended'){
+        ctx.resume().catch(e => console.warn("Couldn't resume context:", e));
+      }
 
       // Clean any existing
       try{sourceNode&&sourceNode.stop();}catch{}
 
+      // If we're using the fallback player
+      if (els.fallbackPlayer.src && !wavBuffer.duration) {
+        els.fallbackPlayer.currentTime = 0;
+        els.fallbackPlayer.play()
+          .then(() => {
+            isPlaying = true;
+            els.playBtn.textContent = 'Restart';
+            els.stopBtn.disabled = false;
+            flash('Playing in compatibility mode...', 1500);
+          })
+          .catch(err => {
+            console.error("Playback error:", err);
+            flash('Playback failed - try another file');
+          });
+        return;
+      }
+
+      // Normal Web Audio API playback
       gainNode=ctx.createGain();
       gainNode.connect(ctx.destination);
       applyEnvelope(0,true);
@@ -237,6 +420,15 @@
     }
 
     function stopPlayback(){
+      // Stop fallback player if active
+      if (els.fallbackPlayer.src && !wavBuffer.duration) {
+        els.fallbackPlayer.pause();
+        isPlaying = false;
+        els.playBtn.textContent = 'Play';
+        flash('Stopped', 800);
+        return;
+      }
+      
       if(!sourceNode) return;
       const ctx=getCtx();
       const now=ctx.currentTime;
@@ -288,7 +480,7 @@
       updatePitchDisplay();
       if(sourceNode){sourceNode.playbackRate.value=Math.pow(2,currentPitch/1200);}  
     }
-    function updatePitchDisplay(){els.pitchDisplay.textContent=`Pitch: ${currentPitch.toFixed(0)} cents`;}
+    function updatePitchDisplay(){els.pitchDisplay.textContent=`Pitch: ${currentPitch.toFixed(0)} cents`;}
 
     /* =====================================================
        MISC & HELPERS
@@ -315,10 +507,34 @@
 
     // Visibility – auto stop when tab hidden
     document.addEventListener('visibilitychange',()=>{if(document.hidden) stopPlayback();});
-
-    // Responsive helper text
-    if(/Mobi|Android|iPhone|iPad|iPod/.test(navigator.userAgent)){
-      els.uploadText.textContent='Tap to Choose or Record Audio';
+    
+    // Fix for iOS audio context - expanded with more aggressive unlocking
+    function forceIOSUnlock() {
+      if (audioCtx && audioCtx.state === 'suspended') {
+        // Create and play a silent buffer to unlock audio
+        const silentBuffer = audioCtx.createBuffer(1, 1, 22050);
+        const source = audioCtx.createBufferSource();
+        source.buffer = silentBuffer;
+        source.connect(audioCtx.destination);
+        source.start(0);
+        
+        // Also try the standard resume
+        audioCtx.resume().catch(e => console.warn("Couldn't resume on touch:", e));
+      }
+    }
+    
+    // Add more opportunities to unlock audio
+    ['touchstart', 'touchend', 'mousedown', 'keydown'].forEach(event => {
+      document.addEventListener(event, forceIOSUnlock, {once: true, passive: true});
+    });
+    
+    /* Check if Web Audio API is supported */
+    try {
+      const testCtx = new (window.AudioContext || window.webkitAudioContext)();
+      testCtx.close().catch(() => {});
+    } catch(e) {
+      els.statusMsg.textContent = 'Audio API not supported in this browser';
+      console.warn("Web Audio API not supported:", e);
     }
   </script>
 </body>
