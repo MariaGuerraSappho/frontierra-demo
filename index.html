@@ -1,289 +1,325 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Frontierra</title>
+  <!-- Allow standalone / PWA mode on iOS -->
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <style>
-    body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #fff0f5; color: #ff69b4; margin: 0; padding: 20px; min-height: 100vh; display: flex; flex-direction: column; align-items: center; user-select: none; -webkit-tap-highlight-color: transparent; }
-    .container { max-width: 600px; width: 100%; text-align: center; }
-    h1 { font-size: 2.5em; margin: 0 0 10px; font-weight: 300; letter-spacing: 3px; }
-    .build-number { margin-bottom: 20px; font-size: 0.9em; color: #aaa; }
-    .file-upload { margin: 20px 0; width: 100%; }
-    .upload-btn { position: relative; display: inline-block; width: 100%; border: 2px dashed #ff69b4; padding: 20px; border-radius: 10px; color: #ff69b4; font-size: 1em; cursor: pointer; transition: background 0.3s; background: none; touch-action: manipulation; }
-    .upload-btn:hover { background: rgba(255,105,180,0.1); }
-    .upload-btn input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-    .currently-playing { margin: 10px 0; font-style: italic; }
-    .pitch-display { margin: 10px 0; font-size: 1.2em; }
-    .playback-controls { display: flex; gap: 10px; margin: 15px 0; width: 100%; }
-    .playback-btn { flex: 1; background: #ff69b4; border: none; padding: 15px; font-size: 1.1em; border-radius: 8px; color: white; cursor: pointer; transition: background 0.2s; touch-action: manipulation; }
-    .playback-btn:hover { background: #ff1493; }
-    .playback-btn:disabled { background: #ffb6c6; cursor: not-allowed; }
-    .controls { display: flex; gap: 10px; margin: 20px 0; width: 100%; }
-    .pitch-btn { 
-      flex: 1; 
-      background: #ff69b4; 
-      border: none; 
-      padding: 20px; 
-      font-size: 1.3em; 
-      border-radius: 8px; 
-      color: white; 
-      cursor: pointer; 
-      transition: background 0.2s; 
-      touch-action: manipulation; 
-      user-select: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    /* -----------  GENERAL STYLES  ----------- */
+    :root {
+      --brand:#ff69b4;
+      --brand-dark:#ff1493;
+      --brand-fade:rgba(255,105,180,.1);
     }
-    .pitch-btn:hover { background: #ff1493; }
-    .pitch-btn svg {
-      width: 24px;
-      height: 24px;
-      fill: white;
+    *{box-sizing:border-box;}
+    body{
+      font-family:"Helvetica Neue",Arial,sans-serif;
+      background:#fff0f5;
+      color:var(--brand);
+      margin:0;padding:20px;
+      min-height:100vh;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      -webkit-user-select:none;
+      user-select:none;
+      -webkit-tap-highlight-color:transparent;
     }
-    .adsr-controls { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin: 20px 0; padding: 20px; background: rgba(255,105,180,0.1); border-radius: 10px; width: 100%; }
-    .adsr-control { display: flex; flex-direction: column; align-items: center; }
-    input[type="range"] { width: 100%; margin: 10px 0; -webkit-appearance: none; height: 2px; background: #ff69b4; }
-    input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px; background: #ff69b4; border-radius: 50%; cursor: pointer; }
-    .status-msg { 
-      margin: 10px 0;
-      color: #ff1493;
-      font-size: 0.9em;
-      min-height: 1.2em;
+    .container{max-width:600px;width:100%;text-align:center;}
+    h1{font-size:2.5rem;margin:0 0 10px;font-weight:300;letter-spacing:3px;}
+    .build-number{margin-bottom:20px;font-size:.9em;color:#999;}
+
+    /* -----------  UPLOAD  ----------- */
+    .file-upload{margin:20px 0;width:100%;}
+    .upload-btn{
+      position:relative;display:block;width:100%;padding:24px;border:2px dashed var(--brand);
+      border-radius:12px;background:var(--brand-fade);color:var(--brand);font-size:1.05rem;cursor:pointer;
+      transition:.25s all;touch-action:manipulation;
     }
-    @media (max-width: 480px) { .pitch-btn { padding: 15px; font-size: 1.1em; } .playback-btn { padding: 12px; font-size: 1em; } }
+    .upload-btn:hover,.upload-btn:active{background:rgba(255,105,180,.2);transform:scale(.97);}
+    .upload-btn input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;}
+
+    /* Larger clickable area for iOS */
+    #realFileInput{font-size:120px;}
+
+    /* Loading spinner */
+    .loading{display:inline-block;margin-left:6px;animation:spin 1s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+
+    /* -----------  STATUS  ----------- */
+    .currently-playing,.pitch-display{margin:10px 0;}
+    .status-msg{min-height:1.3em;color:var(--brand-dark);font-size:.9em;margin:6px 0;}
+
+    /* -----------  CONTROLS  ----------- */
+    .playback-controls,.controls{display:flex;gap:12px;margin:18px 0;width:100%;}
+    .playback-btn,.pitch-btn{
+      flex:1;background:var(--brand);border:none;padding:16px;font-size:1rem;border-radius:10px;color:#fff;cursor:pointer;
+      transition:.2s background;touch-action:manipulation;
+    }
+    .playback-btn:hover,.pitch-btn:hover{background:var(--brand-dark);}  
+    .playback-btn:disabled{background:#ffb6c6;cursor:not-allowed;}
+    .pitch-btn svg{width:24px;height:24px;fill:#fff;}
+
+    /* ADSR */
+    .adsr-controls{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin:20px 0;padding:20px;background:var(--brand-fade);border-radius:12px;width:100%;}
+    .adsr-control{display:flex;flex-direction:column;align-items:center;}
+    input[type=range]{width:100%;margin:10px 0;-webkit-appearance:none;height:3px;background:var(--brand);}
+    input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;background:var(--brand);border-radius:50%;cursor:pointer;}
+
+    /* Small screens */
+    @media(max-width:480px){
+      .pitch-btn{padding:14px;font-size:.95rem;}
+      .playback-btn{padding:13px;font-size:.95rem;}
+      body{padding:16px;}
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Frontierra</h1>
-    <div class="build-number">Build: 1.2.2</div>
+    <div class="build-number">Build&nbsp;1.4.1 (mobile patch)</div>
+
+    <!-- UPLOAD -->
     <div class="file-upload">
-      <label class="upload-btn">
-        Upload audio file
-        <input type="file" id="audioFile" accept="audio/*" />
+      <label class="upload-btn" id="uploadBtnLabel">
+        <span id="uploadText">Tap to Select Audio&nbsp;File</span>
+        <!-- capture opens microphone/camera picker on mobile; accept limits to audio -->
+        <input type="file" id="realFileInput" accept="audio/*" capture />
       </label>
     </div>
+
+    <!-- INFO -->
     <div class="currently-playing" id="currentFile">No file loaded</div>
-    <div class="pitch-display" id="pitchDisplay">Pitch: 0 cents</div>
+    <div class="pitch-display" id="pitchDisplay">Pitch: 0 cents</div>
     <div class="status-msg" id="statusMsg"></div>
+
+    <!-- PLAY / STOP -->
     <div class="playback-controls">
       <button class="playback-btn" id="playBtn" disabled>Play</button>
       <button class="playback-btn" id="stopBtn" disabled>Stop</button>
     </div>
+
+    <!-- PITCH -->
     <div class="controls">
-      <button class="pitch-btn" id="pitchDown">
+      <button class="pitch-btn" id="pitchDown" aria-label="Pitch Down">
         <svg viewBox="0 0 24 24"><path d="M19 13H5v-2h14v2z"/></svg>
       </button>
-      <button class="pitch-btn" id="pitchUp">
+      <button class="pitch-btn" id="pitchUp" aria-label="Pitch Up">
         <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
       </button>
     </div>
+
+    <!-- ADSR -->
     <div class="adsr-controls">
-      <div class="adsr-control"><label>Attack</label><input type="range" id="attack" min="0" max="2" step="0.1" value="0.1"></div>
-      <div class="adsr-control"><label>Decay</label><input type="range" id="decay" min="0" max="2" step="0.1" value="0.2"></div>
-      <div class="adsr-control"><label>Sustain</label><input type="range" id="sustain" min="0" max="1" step="0.1" value="0.5"></div>
-      <div class="adsr-control"><label>Release</label><input type="range" id="release" min="0" max="2" step="0.1" value="0.5"></div>
-      <div class="adsr-control"><label>Volume</label><input type="range" id="volume" min="0" max="1" step="0.1" value="0.7"></div>
+      <div class="adsr-control"><label>Attack</label><input type="range" id="attack" min="0" max="2" step="0.05" value="0.1" /></div>
+      <div class="adsr-control"><label>Decay</label><input type="range" id="decay"  min="0" max="2" step="0.05" value="0.2" /></div>
+      <div class="adsr-control"><label>Sustain</label><input type="range" id="sustain"min="0" max="1" step="0.05" value="0.6" /></div>
+      <div class="adsr-control"><label>Release</label><input type="range" id="release"min="0" max="2" step="0.05" value="0.5" /></div>
+      <div class="adsr-control"><label>Volume</label><input type="range" id="volume" min="0" max="1" step="0.05" value="0.8" /></div>
     </div>
   </div>
 
-  <script>
-    // Initialize audio context only after user interaction to comply with mobile browsers
-    let audioCtx = null;
-    let wavBuffer = null;
-    let sourceNode = null;
-    let gainNode = null;
-    let isPlaying = false;
-    let currentPitch = 0;
-    let pitchBendActive = false;
+  <!-- Optional hidden <audio> element used only as a fallback for very old browsers -->
+  <audio id="fallbackPlayer" controls style="display:none"></audio>
 
-    const statusMsg = document.getElementById('statusMsg');
-    const fileInput = document.getElementById('audioFile');
-    const playBtn = document.getElementById('playBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const currentFileLabel = document.getElementById('currentFile');
-    const pitchDisplay = document.getElementById('pitchDisplay');
-    const attackSlider = document.getElementById('attack');
-    const decaySlider = document.getElementById('decay');
-    const sustainSlider = document.getElementById('sustain');
-    const releaseSlider = document.getElementById('release');
-    const volumeSlider = document.getElementById('volume');
-    
-    // Initialize audio context on first user interaction
-    function initAudioContext() {
-      if (!audioCtx) {
-        try {
-          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-          statusMsg.textContent = "Audio initialized";
-          setTimeout(() => { statusMsg.textContent = ""; }, 2000);
-        } catch (e) {
-          console.error("Failed to create audio context:", e);
-          statusMsg.textContent = "Audio initialization failed";
-        }
-      }
+  <script>
+    /* =====================================================
+       UTILITIES / STATE
+    ===================================================== */
+    const els = {
+      fileInput:   document.getElementById('realFileInput'),
+      playBtn:     document.getElementById('playBtn'),
+      stopBtn:     document.getElementById('stopBtn'),
+      pitchUp:     document.getElementById('pitchUp'),
+      pitchDown:   document.getElementById('pitchDown'),
+      pitchDisplay:document.getElementById('pitchDisplay'),
+      statusMsg:   document.getElementById('statusMsg'),
+      currentFile: document.getElementById('currentFile'),
+      uploadText:  document.getElementById('uploadText'),
+      attack:      document.getElementById('attack'),
+      decay:       document.getElementById('decay'),
+      sustain:     document.getElementById('sustain'),
+      release:     document.getElementById('release'),
+      volume:      document.getElementById('volume'),
+    };
+
+    let audioCtx=null,wavBuffer=null,sourceNode=null,gainNode=null;
+    let isPlaying=false,currentPitch=0;
+
+    /* =====================================================
+       AUDIO CONTEXT INITIALISATION / UNLOCK (iOS & Android)
+    ===================================================== */
+    function getCtx(){
+      if(audioCtx) return audioCtx;
+      const AC=window.AudioContext||window.webkitAudioContext;
+      audioCtx=new AC({ latencyHint:"interactive" });
       return audioCtx;
     }
 
-    // Event listeners for buttons to ensure audio context is created
-    document.querySelectorAll('button').forEach(btn => {
-      btn.addEventListener('click', initAudioContext);
+    // Attempt to unlock on first user gesture (required on some phones)
+    const unlock=()=>{
+      if(!audioCtx) getCtx();
+      if(audioCtx.state==='suspended') audioCtx.resume();
+      document.removeEventListener('pointerup',unlock);
+      document.removeEventListener('touchend',unlock);
+    };
+    document.addEventListener('pointerup',unlock,{once:true});
+    document.addEventListener('touchend',unlock,{once:true,passive:true});
+
+    /* =====================================================
+       FILE LOADING
+    ===================================================== */
+    els.fileInput.addEventListener('change',e=>{
+      const file=e.target.files[0];
+      if(file) handleFile(file);
     });
 
-    fileInput.addEventListener('change', async (e) => {
-      initAudioContext(); // Ensure audio context is created
-      
-      const file = e.target.files[0];
-      if (!file) return;
-      if (isPlaying) stopPlayback();
-      isPlaying = false;
-      currentPitch = 0;
-      pitchDisplay.textContent = 'Pitch: 0 cents';
-      playBtn.textContent = 'Play';
-      playBtn.disabled = true;
-      stopBtn.disabled = true;
-      currentFileLabel.textContent = `Decoding: ${file.name}…`;
+    async function handleFile(file){
+      try{
+        if(isPlaying) stopPlayback();
+        wavBuffer=null;els.playBtn.disabled=true;els.stopBtn.disabled=true;currentPitch=0;updatePitchDisplay();
 
-      try {
-        const arrayBuffer = await file.arrayBuffer();
-        wavBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-        currentFileLabel.textContent = `Loaded: ${file.name}`;
-        playBtn.disabled = false;
-        stopBtn.disabled = false;
-        statusMsg.textContent = "File loaded successfully";
-        setTimeout(() => { statusMsg.textContent = ""; }, 2000);
-      } catch (err) {
-        console.error('Decode error:', err);
-        currentFileLabel.textContent = 'Error loading file';
-        statusMsg.textContent = "Error: Couldn't decode audio file";
+        els.currentFile.innerHTML=`Decoding: ${file.name} <span class="loading">↻</span>`;
+        els.statusMsg.textContent='Processing file…';
+
+        const ctx=getCtx();
+        // Always resume context in case still suspended
+        try{await ctx.resume();}catch{}
+
+        const arrayBuf=await file.arrayBuffer();
+        wavBuffer=await ctx.decodeAudioData(arrayBuf);
+
+        els.currentFile.textContent=`Loaded: ${file.name}`;
+        els.statusMsg.textContent='Ready';
+        els.playBtn.disabled=false;
+        els.stopBtn.disabled=false;
+        setTimeout(()=>els.statusMsg.textContent='',1500);
+
+        // On mobile auto‑playback helps to prove audio works (optional)
+        if(/Mobi|Android|iPhone|iPad|iPod/.test(navigator.userAgent)) {
+          playAudio();
+        }
+      }catch(err){
+        console.error(err);
+        els.currentFile.textContent='Unable to decode file';
+        els.statusMsg.textContent=err.message||'Unknown error';
       }
-    });
+    }
 
-    function scheduleEnvelope(now) {
-      const a = parseFloat(attackSlider.value);
-      const d = parseFloat(decaySlider.value);
-      const s = parseFloat(sustainSlider.value);
-      const r = parseFloat(releaseSlider.value);
-      const vol = parseFloat(volumeSlider.value);
+    /* =====================================================
+       PLAYBACK
+    ===================================================== */
+    function playAudio(){
+      if(!wavBuffer){flash('No audio loaded');return;}
+      const ctx=getCtx();
+      if(ctx.state==='suspended'){ctx.resume();}
 
+      // Clean any existing
+      try{sourceNode&&sourceNode.stop();}catch{}
+
+      gainNode=ctx.createGain();
+      gainNode.connect(ctx.destination);
+      applyEnvelope(0,true);
+
+      sourceNode=ctx.createBufferSource();
+      sourceNode.buffer=wavBuffer;
+      sourceNode.playbackRate.value=Math.pow(2,currentPitch/1200);
+      sourceNode.connect(gainNode);
+      sourceNode.start();
+      sourceNode.onended=()=>{isPlaying=false;els.playBtn.textContent='Play';};
+
+      isPlaying=true;
+      els.playBtn.textContent='Restart';
+      els.stopBtn.disabled=false;
+      flash('Playing…',800);
+    }
+
+    function stopPlayback(){
+      if(!sourceNode) return;
+      const ctx=getCtx();
+      const now=ctx.currentTime;
+      const rel=parseFloat(els.release.value);
       gainNode.gain.cancelScheduledValues(now);
-      gainNode.gain.setValueAtTime(0, now);
-      gainNode.gain.linearRampToValueAtTime(vol, now + a);
-      gainNode.gain.linearRampToValueAtTime(vol * s, now + a + d);
+      gainNode.gain.setValueAtTime(gainNode.gain.value,now);
+      gainNode.gain.linearRampToValueAtTime(0,now+rel);
+      sourceNode.stop(now+rel);
+      isPlaying=false;
+      els.playBtn.textContent='Play';
+      flash('Stopped',800);
     }
 
-    function playAudio() {
-      initAudioContext(); // Ensure context is created
-      
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume().then(() => {
-          statusMsg.textContent = "Audio resumed";
-          setTimeout(() => { statusMsg.textContent = ""; }, 2000);
-        });
-      }
-      
-      if (wavBuffer) {
-        sourceNode?.stop();
-        gainNode = audioCtx.createGain();
-        gainNode.connect(audioCtx.destination);
-        const now = audioCtx.currentTime;
-        scheduleEnvelope(now);
-
-        sourceNode = audioCtx.createBufferSource();
-        sourceNode.buffer = wavBuffer;
-        sourceNode.playbackRate.value = Math.pow(2, currentPitch / 1200);
-        sourceNode.connect(gainNode);
-        sourceNode.start(now);
-        sourceNode.onended = function() {
-          if (isPlaying) {
-            isPlaying = false;
-            playBtn.textContent = 'Play';
-          }
-        };
-
-        isPlaying = true;
-        playBtn.textContent = 'Restart';
-        stopBtn.disabled = false;
-      }
+    function applyEnvelope(offset=0,initial=false){
+      const a=parseFloat(els.attack.value),
+            d=parseFloat(els.decay.value),
+            s=parseFloat(els.sustain.value),
+            v=parseFloat(els.volume.value);
+      const ctx=getCtx();
+      const now=ctx.currentTime+offset;
+      gainNode.gain.cancelScheduledValues(now);
+      if(initial){gainNode.gain.setValueAtTime(0,now);}    
+      gainNode.gain.linearRampToValueAtTime(v,now+a);
+      gainNode.gain.linearRampToValueAtTime(v*s,now+a+d);
     }
 
-    function stopPlayback() {
-      if (gainNode && sourceNode) {
-        const now = audioCtx.currentTime;
-        const r = parseFloat(releaseSlider.value);
-        const currentGain = gainNode.gain.value;
-        gainNode.gain.cancelScheduledValues(now);
-        gainNode.gain.setValueAtTime(currentGain, now);
-        gainNode.gain.linearRampToValueAtTime(0, now + r);
-        sourceNode.stop(now + r);
-      }
-      isPlaying = false;
-      playBtn.textContent = 'Play';
-    }
+    /* =====================================================
+       PITCH CONTROLS (pointer + keyboard)
+    ===================================================== */
+    const repeat=(fn)=>{let int;return{
+      start(){fn();int=setInterval(fn,100);},
+      stop(){clearInterval(int);}  
+    }};
 
-    playBtn.addEventListener('click', playAudio);
-    stopBtn.addEventListener('click', stopPlayback);
+    const upRepeat=repeat(()=>changePitch(2));
+    const dnRepeat=repeat(()=>changePitch(-2));
 
-    function changePitch(cents) {
-      if (!audioCtx) initAudioContext();
-      
-      currentPitch += cents;
-      pitchDisplay.textContent = `Pitch: ${currentPitch.toFixed(1)} cents`;
-      if (sourceNode && isPlaying) {
-        sourceNode.playbackRate.value = Math.pow(2, currentPitch / 1200);
-      }
-    }
+    els.pitchUp.addEventListener('pointerdown',()=>upRepeat.start());
+    els.pitchDown.addEventListener('pointerdown',()=>dnRepeat.start());
+    window.addEventListener('pointerup',()=>{upRepeat.stop();dnRepeat.stop();});
 
-    // Improved touch & mouse handling for pitch buttons
-    ['pitchUp', 'pitchDown'].forEach((id) => {
-      const btn = document.getElementById(id);
-      let interval;
-      
-      const startBend = (e) => {
-        e.preventDefault(); // Prevent default behavior
-        if (pitchBendActive) return; // Prevent multiple activation
-        
-        pitchBendActive = true;
-        changePitch(id === 'pitchUp' ? 2 : -2); // Initial change
-        
-        // Clear any existing interval and start a new one
-        clearInterval(interval);
-        interval = setInterval(() => changePitch(id === 'pitchUp' ? 2 : -2), 100);
-      };
-      
-      const stopBend = (e) => {
-        if (e) e.preventDefault(); // Prevent default behavior
-        clearInterval(interval);
-        pitchBendActive = false;
-      };
-      
-      // Mouse events
-      btn.addEventListener('mousedown', startBend);
-      window.addEventListener('mouseup', stopBend);
-      
-      // Touch events
-      btn.addEventListener('touchstart', startBend, { passive: false });
-      window.addEventListener('touchend', stopBend);
-      window.addEventListener('touchcancel', stopBend);
+    document.addEventListener('keydown',e=>{
+      if(e.key==='ArrowUp'||e.key==='ArrowRight') changePitch(2);
+      if(e.key==='ArrowDown'||e.key==='ArrowLeft') changePitch(-2);
     });
 
-    // Keyboard arrow keys for pitch control
-    document.addEventListener('keydown', (e) => {
-      if (!audioCtx) initAudioContext();
-      
-      if (e.key === 'ArrowUp') changePitch(2);
-      else if (e.key === 'ArrowDown') changePitch(-2);
-      else if (e.key === 'ArrowRight') changePitch(2);
-      else if (e.key === 'ArrowLeft') changePitch(-2);
+    function changePitch(cents){
+      currentPitch+=cents;
+      updatePitchDisplay();
+      if(sourceNode){sourceNode.playbackRate.value=Math.pow(2,currentPitch/1200);}  
+    }
+    function updatePitchDisplay(){els.pitchDisplay.textContent=`Pitch: ${currentPitch.toFixed(0)} cents`;}
+
+    /* =====================================================
+       MISC & HELPERS
+    ===================================================== */
+    function flash(msg,dur=1200){els.statusMsg.textContent=msg;setTimeout(()=>els.statusMsg.textContent='',dur);}  
+
+    // Play / Stop buttons
+    els.playBtn.addEventListener('click',playAudio);
+    els.stopBtn.addEventListener('click',stopPlayback);
+
+    // Basic drag‑and‑drop (desktop only)
+    ['dragenter','dragover'].forEach(evt=>document.addEventListener(evt,e=>e.preventDefault()));
+    document.addEventListener('drop',e=>{
+      e.preventDefault();
+      const file=e.dataTransfer.files&&e.dataTransfer.files[0];
+      if(file) handleFile(file);
     });
-    
-    // Handle page visibility changes to stop playback when tab is hidden
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && isPlaying) {
-        stopPlayback();
-      }
+
+    // Clipboard paste (desktop)
+    window.addEventListener('paste',e=>{
+      const item=e.clipboardData.files&&e.clipboardData.files[0];
+      if(item) handleFile(item);
     });
+
+    // Visibility – auto stop when tab hidden
+    document.addEventListener('visibilitychange',()=>{if(document.hidden) stopPlayback();});
+
+    // Responsive helper text
+    if(/Mobi|Android|iPhone|iPad|iPod/.test(navigator.userAgent)){
+      els.uploadText.textContent='Tap to Choose or Record Audio';
+    }
   </script>
 </body>
 </html>
