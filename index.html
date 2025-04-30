@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Frontierra</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <style>
     body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #fff0f5; color: #ff69b4; margin: 0; padding: 20px; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
     .container { max-width: 600px; width: 100%; text-align: center; }
@@ -23,6 +24,7 @@
     .pitch-btn:hover { transform: scale(1.02); background: #ff1493; }
     .arrow-controls { display: flex; justify-content: center; gap: 10px; margin: 20px 0; }
     .arrow-btn { background: #ff69b4; border: none; padding: 10px 15px; border-radius: 5px; color: white; cursor: pointer; }
+    .arrow-btn:hover { background: #ff1493; }
     .adsr-controls { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin: 20px 0; padding: 20px; background: rgba(255, 105, 180, 0.1); border-radius: 10px; }
     .adsr-control { display: flex; flex-direction: column; align-items: center; }
     input[type="range"] { width: 100%; margin: 10px 0; -webkit-appearance: none; height: 2px; background: #ff69b4; }
@@ -61,13 +63,8 @@
     </div>
   </div>
 
-  <script type="importmap">
-  {
-    "imports": { "tone": "https://unpkg.com/tone@14.7.77/build/Tone.js" }
-  }
-  </script>
   <script type="module">
-    import * as Tone from 'tone';
+    import * as Tone from 'https://unpkg.com/tone@14.7.77/build/Tone.js';
 
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     let wavBuffer = null;
@@ -116,12 +113,13 @@
 
       if (isPlaying) stopPlayback();
       isPlaying = false;
+      currentPitch = 0;
+      pitchDisplay.textContent = 'Pitch: 0 cents';
       playBtn.textContent = 'Play';
-      currentPitch = 0; pitchDisplay.textContent = 'Pitch: 0 cents';
       playBtn.disabled = stopBtn.disabled = true;
       currentFileLabel.textContent = `Loading: ${file.name}…`;
 
-      if (file.name.toLowerCase().endsWith('.mid') || file.name.toLowerCase().endsWith('.mIDI')) {
+      if (/\.mid(i)?$/i.test(file.name)) {
         isMidi = true;
         const arrayBuffer = await file.arrayBuffer();
         const midi = new Tone.Midi(arrayBuffer);
@@ -139,6 +137,11 @@
     });
 
     async function startPlayback() {
+      // ensure audio context is resumed on mobile
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
+
       if (isMidi) {
         await Tone.start();
         const now = Tone.now();
@@ -172,6 +175,28 @@
     playBtn.addEventListener('click', () => startPlayback());
     stopBtn.addEventListener('click', stopPlayback);
 
+    // handle both mouse and touch for pitch bending
+    ['pitchUp','pitchDown','arrowLeft','arrowRight'].forEach(id => {
+      const btn = document.getElementById(id);
+      let interval;
+      const startBend = () => {
+        clearInterval(interval);
+        interval = setInterval(() => changePitch((id === 'pitchUp' || id === 'arrowRight') ? 2 : -2), 50);
+      };
+      const stopBend = () => clearInterval(interval);
+      btn.addEventListener('mousedown', startBend);
+      btn.addEventListener('touchstart', startBend);
+      btn.addEventListener('pointerdown', startBend);
+      ['mouseup','mouseleave','touchend','pointerup','touchcancel','pointercancel'].forEach(evt => btn.addEventListener(evt, stopBend));
+    });
+
+    window.addEventListener('keydown', e => {
+      if (['ArrowUp','ArrowRight','ArrowDown','ArrowLeft'].includes(e.key)) {
+        e.preventDefault();
+        changePitch((e.key === 'ArrowUp' || e.key === 'ArrowRight') ? 2 : -2);
+      }
+    });
+
     function changePitch(cents) {
       currentPitch += cents;
       pitchDisplay.textContent = `Pitch: ${currentPitch.toFixed(1)} cents`;
@@ -179,20 +204,6 @@
         wavSource.playbackRate.value = Math.pow(2, currentPitch/1200);
       }
     }
-
-    ['pitchUp','pitchDown','arrowLeft','arrowRight'].forEach(id => {
-      const btn = document.getElementById(id);
-      let interval;
-      btn.addEventListener('mousedown', () => interval = setInterval(() => changePitch((id.includes('Up')||id==='arrowRight')?2:-2), 50));
-      ['mouseup','mouseleave'].forEach(evt => btn.addEventListener(evt, () => clearInterval(interval)));
-    });
-
-    window.addEventListener('keydown', e => {
-      if (['ArrowUp','ArrowRight','ArrowDown','ArrowLeft'].includes(e.key)) {
-        e.preventDefault();
-        changePitch((e.key==='ArrowUp'||e.key==='ArrowRight')?2:-2);
-      }
-    });
 
     document.querySelectorAll('.adsr-controls input').forEach(input => input.addEventListener('input', updateADSR));
   </script>
